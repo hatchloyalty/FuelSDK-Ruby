@@ -1,40 +1,40 @@
-=begin
-Copyright (c) 2013 ExactTarget, Inc.
+# frozen_string_literal: true
 
-All rights reserved.
+# Copyright (c) 2013 ExactTarget, Inc.
+#
+# All rights reserved.
+#
+# Redistribution and use in source and binary forms, with or without modification, are permitted provided that the
+#
+# following conditions are met:
+#
+# 1. Redistributions of source code must retain the above copyright notice, this list of conditions and the
+#
+# following disclaimer.
+#
+# 2. Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the
+#
+# following disclaimer in the documentation and/or other materials provided with the distribution.
+#
+# 3. Neither the name of the copyright holder nor the names of its contributors may be used to endorse or promote
+#
+# products derived from this software without specific prior written permission.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES,
+#
+# INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+#
+# DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+#
+# SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+#
+# SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
+#
+# WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
+#
+# USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-Redistribution and use in source and binary forms, with or without modification, are permitted provided that the 
-
-following conditions are met:
-
-1. Redistributions of source code must retain the above copyright notice, this list of conditions and the 
-
-following disclaimer.
-
-2. Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the 
-
-following disclaimer in the documentation and/or other materials provided with the distribution.
-
-3. Neither the name of the copyright holder nor the names of its contributors may be used to endorse or promote 
-
-products derived from this software without specific prior written permission.
-
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, 
-
-INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE 
-
-DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, 
-
-SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR 
-
-SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, 
-
-WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE 
-
-USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-=end
-
-require "marketingcloudsdk/version"
+require 'marketingcloudsdk/version'
 
 require 'rubygems'
 require 'open-uri'
@@ -44,13 +44,11 @@ require 'json'
 require 'yaml'
 require 'jwt'
 
-
-def indifferent_access key, hash
+def indifferent_access(key, hash)
   hash[key.to_sym] || hash[key.to_s]
 end
 
 module MarketingCloudSDK
-
   class Soap
     def client
       'soap'
@@ -66,7 +64,7 @@ module MarketingCloudSDK
   class Client
     attr_reader :id, :secret, :signature
 
-    def initialize params={}, debug=false
+    def initialize(params = {}, debug = false)
       @debug = debug
       @id = indifferent_access :clientid, params
       @secret = indifferent_access :clientsecret, params
@@ -75,15 +73,14 @@ module MarketingCloudSDK
   end
 
   class SoapClient < Client
-    def initialize getWSDL=true, params={}, debug=false
+    def initialize(_getWSDL = true, params = {}, debug = false)
       super params, debug
-      @wsdl = params["defaultwsdl"]
+      @wsdl = params['defaultwsdl']
     end
   end
 
   class RestClient < Client
   end
-
 
   # parse response
   class ET_Constructor
@@ -91,31 +88,29 @@ module MarketingCloudSDK
 
     def initialize(response = nil, rest = false)
       @results = []
-      if !response.nil? && !rest then
+      if !response.nil? && !rest
         envelope = response.hash[:envelope]
         @@body = envelope[:body]
 
-        if ((!response.soap_fault?) or (!response.http_error?)) then
+        if !response.soap_fault? || !response.http_error?
           @code = response.http.code
           @status = true
-        elsif (response.soap_fault?) then
+        elsif response.soap_fault?
           @code = response.http.code
           @message = @@body[:fault][:faultstring]
           @status = false
-        elsif (response.http_error?) then
+        elsif response.http_error?
           @code = response.http.code
           @status = false
         end
       elsif
         @code = response.code
         @status = true
-        if @code != "200" then
-          @status = false
-        end
+        @status = false if @code != '200'
 
         begin
           @results = JSON.parse(response.body)
-        rescue
+        rescue StandardError
           @message = response.body
         end
 
@@ -124,34 +119,29 @@ module MarketingCloudSDK
   end
 
   class ET_CreateWSDL
-
     def initialize(path)
       # Get the header info for the correct wsdl
       response = HTTPI.head(@wsdl)
-      if response and (response.code >= 200 and response.code <= 400) then
+      if response && ((response.code >= 200) && (response.code <= 400))
         header = response.headers
         # Check when the WSDL was last modified
         modifiedTime = Date.parse(header['last-modified'])
         p = path + '/ExactTargetWSDL.xml'
         # Check if a local file already exists
-        if (File.file?(p) and File.readable?(p) and !File.zero?(p)) then
+        if File.file?(p) && File.readable?(p) && !File.zero?(p)
           createdTime = File.new(p).mtime.to_date
 
           # Check if the locally created WSDL older than the production WSDL
-          if createdTime < modifiedTime then
-            createIt = true
-          else
-            createIt = false
-          end
+          createIt = createdTime < modifiedTime
         else
           createIt = true
         end
 
-        if createIt then
+        if createIt
           res = open(@wsdl).read
-          File.open(p, 'w+') { |f|
+          File.open(p, 'w+') do |f|
             f.write(res)
-          }
+          end
         end
         @status = response.code
       else
@@ -162,114 +152,104 @@ module MarketingCloudSDK
 
   class ET_Client < ET_CreateWSDL
     attr_accessor :auth, :ready, :status, :debug, :authToken
-    attr_reader :authTokenExpiration,:internalAuthToken, :wsdlLoc, :clientId,
-      :clientSecret, :soapHeader, :authObj, :path, :appsignature, :stackID, :refreshKey
+    attr_reader :authTokenExpiration, :internalAuthToken, :wsdlLoc, :clientId,
+                :clientSecret, :soapHeader, :authObj, :path, :appsignature, :stackID, :refreshKey
 
     def initialize(getWSDL = true, debug = false, params = nil)
-      config = YAML.load_file("config.yaml")
-      @clientId = config["clientid"]
-      @clientSecret = config["clientsecret"]
-      @appsignature = config["appsignature"]
-      @wsdl = config["defaultwsdl"]
+      config = YAML.load_file('config.yaml')
+      @clientId = config['clientid']
+      @clientSecret = config['clientsecret']
+      @appsignature = config['appsignature']
+      @wsdl = config['defaultwsdl']
       @debug = debug
 
       begin
         @path = File.dirname(__FILE__)
 
-        #make a new WSDL
-        if getWSDL then
-          super(@path)
-        end
+        # make a new WSDL
+        super(@path) if getWSDL
 
-        if params && params.has_key?("jwt") then
-          jwt = JWT.decode(params["jwt"], @appsignature, true);
+        if params&.key?('jwt')
+          jwt = JWT.decode(params['jwt'], @appsignature, true)
           @authToken = jwt['request']['user']['oauthToken']
           @authTokenExpiration = Time.new + jwt['request']['user']['expiresIn']
           @internalAuthToken = jwt['request']['user']['internalOauthToken']
           @refreshKey = jwt['request']['user']['refreshToken']
 
-          self.determineStack
+          determineStack
 
-          @authObj = {'oAuth' => {'oAuthToken' => @internalAuthToken}}
-          @authObj[:attributes!] = { 'oAuth' => { 'xmlns' => 'http://exacttarget.com' }}
+          @authObj = { 'oAuth' => { 'oAuthToken' => @internalAuthToken } }
+          @authObj[:attributes!] = { 'oAuth' => { 'xmlns' => 'http://exacttarget.com' } }
 
           myWSDL = File.read(@path + '/ExactTargetWSDL.xml')
           @auth = Savon.client(
             soap_header: @authObj,
             wsdl: myWSDL,
             endpoint: @endpoint,
-            wsse_auth: ["*", "*"],
+            wsse_auth: ['*', '*'],
             raise_errors: false,
             log: @debug,
-            open_timeout:180,
+            open_timeout: 180,
             read_timeout: 180
           )
         else
-          self.refreshToken
+          refreshToken
         end
-
-      rescue
+      rescue StandardError
         raise
       end
 
-      if ((@auth.operations.length > 0) and (@status >= 200 and @status <= 400)) then
-        @ready = true
-      else
-        @ready = false
-      end
+      @ready = if !@auth.operations.empty? && ((@status >= 200) && (@status <= 400))
+                 true
+               else
+                 false
+               end
     end
 
-    def debug=(value)
-      @debug = value
-    end
+    attr_writer :debug
 
     def refreshToken(force = nil)
-      #If we don't already have a token or the token expires within 5 min(300 seconds), get one
-      if ((@authToken.nil? || Time.new + 300 > @authTokenExpiration) || force) then
+      # If we don't already have a token or the token expires within 5 min(300 seconds), get one
+      if (@authToken.nil? || Time.new + 300 > @authTokenExpiration) || force
         begin
-          uri = URI.parse("https://auth.exacttargetapis.com/v1/requestToken?legacy=1")
+          uri = URI.parse('https://auth.exacttargetapis.com/v1/requestToken?legacy=1')
           http = Net::HTTP.new(uri.host, uri.port)
           http.use_ssl = true
           request = Net::HTTP::Post.new(uri.request_uri)
-          jsonPayload = {'clientId' => @clientId, 'clientSecret' => @clientSecret}
+          jsonPayload = { 'clientId' => @clientId, 'clientSecret' => @clientSecret }
 
-          #Pass in the refreshKey if we have it
-          if @refreshKey then
-            jsonPayload['refreshToken'] = @refreshKey
-          end
+          # Pass in the refreshKey if we have it
+          jsonPayload['refreshToken'] = @refreshKey if @refreshKey
 
           request.body = jsonPayload.to_json
-          request.add_field "Content-Type", "application/json"
+          request.add_field 'Content-Type', 'application/json'
           tokenResponse = JSON.parse(http.request(request).body)
 
-          if !tokenResponse.has_key?('accessToken') then
+          unless tokenResponse.key?('accessToken')
             raise 'Unable to validate App Keys(ClientID/ClientSecret) provided: ' + http.request(request).body
           end
 
           @authToken = tokenResponse['accessToken']
           @authTokenExpiration = Time.new + tokenResponse['expiresIn']
           @internalAuthToken = tokenResponse['legacyToken']
-          if tokenResponse.has_key?("refreshToken") then
+          if tokenResponse.key?('refreshToken')
             @refreshKey = tokenResponse['refreshToken']
           end
 
-          if @endpoint.nil? then
-            self.determineStack
-          end
+          determineStack if @endpoint.nil?
 
-          @authObj = {'oAuth' => {'oAuthToken' => @internalAuthToken}}
-          @authObj[:attributes!] = { 'oAuth' => { 'xmlns' => 'http://exacttarget.com' }}
+          @authObj = { 'oAuth' => { 'oAuthToken' => @internalAuthToken } }
+          @authObj[:attributes!] = { 'oAuth' => { 'xmlns' => 'http://exacttarget.com' } }
 
           myWSDL = File.read(@path + '/ExactTargetWSDL.xml')
           @auth = Savon.client(
             soap_header: @authObj,
             wsdl: myWSDL,
             endpoint: @endpoint,
-            wsse_auth: ["*", "*"],
+            wsse_auth: ['*', '*'],
             raise_errors: false,
             log: @debug
           )
-
         rescue Exception => e
           raise 'Unable to validate App Keys(ClientID/ClientSecret) provided: ' + e.message
         end
@@ -281,27 +261,25 @@ module MarketingCloudSDK
       newSub.authStub = self
       lists = []
 
-      listIDs.each{ |p|
-        lists.push({"ID"=> p})
-      }
-
-      newSub.props = {"EmailAddress" => emailAddress, "Lists" => lists}
-      if !subscriberKey.nil? then
-        newSub.props['SubscriberKey']  = subscriberKey;
+      listIDs.each do |p|
+        lists.push('ID' => p)
       end
+
+      newSub.props = { 'EmailAddress' => emailAddress, 'Lists' => lists }
+      newSub.props['SubscriberKey'] = subscriberKey unless subscriberKey.nil?
 
       # Try to add the subscriber
       postResponse = newSub.post
 
-      if postResponse.status == false then
+      if postResponse.status == false
         # If the subscriber already exists in the account then we need to do an update.
         # Update Subscriber On List
-        if postResponse.results[0][:error_code] == "12014" then
+        if postResponse.results[0][:error_code] == '12014'
           patchResponse = newSub.patch
           return patchResponse
         end
       end
-      return postResponse
+      postResponse
     end
 
     def CreateDataExtensions(dataExtensionDefinitions)
@@ -311,52 +289,46 @@ module MarketingCloudSDK
       newDEs.props = dataExtensionDefinitions
       postResponse = newDEs.post
 
-      return postResponse
+      postResponse
     end
 
-
     protected
-      def determineStack()
-        begin
-          uri = URI.parse("https://www.exacttargetapis.com/platform/v1/endpoints/soap?access_token=" + @authToken)
-          http = Net::HTTP.new(uri.host, uri.port)
 
-          http.use_ssl = true
+    def determineStack
+      uri = URI.parse('https://www.exacttargetapis.com/platform/v1/endpoints/soap?access_token=' + @authToken)
+      http = Net::HTTP.new(uri.host, uri.port)
 
-          request = Net::HTTP::Get.new(uri.request_uri)
+      http.use_ssl = true
 
-          contextResponse = JSON.parse(http.request(request).body)
-          @endpoint = contextResponse['url']
+      request = Net::HTTP::Get.new(uri.request_uri)
 
-        rescue StandardError => e
-          raise 'Unable to determine stack using /platform/v1/tokenContext: ' + e.message
-        end
-      end
+      contextResponse = JSON.parse(http.request(request).body)
+      @endpoint = contextResponse['url']
+    rescue StandardError => e
+      raise 'Unable to determine stack using /platform/v1/tokenContext: ' + e.message
+    end
   end
 
   class ET_Describe < ET_Constructor
     def initialize(authStub = nil, objType = nil)
-      begin
-        authStub.refreshToken
-        response = authStub.auth.call(:describe, :message => {
-              'DescribeRequests' =>
-                {'ObjectDefinitionRequest' =>
-                  {'ObjectType' => objType}
-              }
-            })
-      ensure
-        super(response)
+      authStub.refreshToken
+      response = authStub.auth.call(:describe, message: {
+                                      'DescribeRequests' =>
+                                        { 'ObjectDefinitionRequest' =>
+                                          { 'ObjectType' => objType } }
+                                    })
+    ensure
+      super(response)
 
-        if @status then
-          objDef = @@body[:definition_response_msg][:object_definition]
+      if @status
+        objDef = @@body[:definition_response_msg][:object_definition]
 
-          if objDef then
-            @overallStatus = true
-          else
-            @overallStatus = false
-          end
-          @results = @@body[:definition_response_msg][:object_definition][:properties]
-        end
+        @overallStatus = if objDef
+                           true
+                         else
+                           false
+                         end
+        @results = @@body[:definition_response_msg][:object_definition][:properties]
       end
     end
   end
@@ -367,14 +339,14 @@ module MarketingCloudSDK
 
       begin
         authStub.refreshToken
-        if props.is_a? Array then
+        if props.is_a? Array
           obj = {
             'Objects' => [],
             :attributes! => { 'Objects' => { 'xsi:type' => ('tns:' + objType) } }
           }
-          props.each{ |p|
+          props.each do |p|
             obj['Objects'] << p
-          }
+          end
         else
           obj = {
             'Objects' => props,
@@ -382,18 +354,15 @@ module MarketingCloudSDK
           }
         end
 
-        response = authStub.auth.call(:create, :message => obj)
-
+        response = authStub.auth.call(:create, message: obj)
       ensure
         super(response)
-        if @status then
-          if @@body[:create_response][:overall_status] != "OK"
-            @status = false
-          end
-          #@results = @@body[:create_response][:results]
-          if !@@body[:create_response][:results].nil? then
-            if !@@body[:create_response][:results].is_a? Hash then
-              @results = @results + @@body[:create_response][:results]
+        if @status
+          @status = false if @@body[:create_response][:overall_status] != 'OK'
+          # @results = @@body[:create_response][:results]
+          unless @@body[:create_response][:results].nil?
+            if !@@body[:create_response][:results].is_a? Hash
+              @results += @@body[:create_response][:results]
             else
               @results.push(@@body[:create_response][:results])
             end
@@ -404,19 +373,18 @@ module MarketingCloudSDK
   end
 
   class ET_Delete < ET_Constructor
-
     def initialize(authStub, objType, props = nil)
       @results = []
       begin
         authStub.refreshToken
-        if props.is_a? Array then
+        if props.is_a? Array
           obj = {
             'Objects' => [],
             :attributes! => { 'Objects' => { 'xsi:type' => ('tns:' + objType) } }
           }
-          props.each{ |p|
+          props.each do |p|
             obj['Objects'] << p
-          }
+          end
         else
           obj = {
             'Objects' => props,
@@ -424,15 +392,13 @@ module MarketingCloudSDK
           }
         end
 
-        response = authStub.auth.call(:delete, :message => obj)
+        response = authStub.auth.call(:delete, message: obj)
       ensure
         super(response)
-        if @status then
-          if @@body[:delete_response][:overall_status] != "OK"
-            @status = false
-          end
-          if !@@body[:delete_response][:results].is_a? Hash then
-            @results = @results + @@body[:delete_response][:results]
+        if @status
+          @status = false if @@body[:delete_response][:overall_status] != 'OK'
+          if !@@body[:delete_response][:results].is_a? Hash
+            @results += @@body[:delete_response][:results]
           else
             @results.push(@@body[:delete_response][:results])
           end
@@ -446,14 +412,14 @@ module MarketingCloudSDK
       @results = []
       begin
         authStub.refreshToken
-        if props.is_a? Array then
+        if props.is_a? Array
           obj = {
             'Objects' => [],
             :attributes! => { 'Objects' => { 'xsi:type' => ('tns:' + objType) } }
           }
-          props.each{ |p|
+          props.each do |p|
             obj['Objects'] << p
-           }
+          end
         else
           obj = {
             'Objects' => props,
@@ -461,16 +427,13 @@ module MarketingCloudSDK
           }
         end
 
-        response = authStub.auth.call(:update, :message => obj)
-
+        response = authStub.auth.call(:update, message: obj)
       ensure
         super(response)
-        if @status then
-          if @@body[:update_response][:overall_status] != "OK"
-            @status = false
-          end
-          if !@@body[:update_response][:results].is_a? Hash then
-            @results = @results + @@body[:update_response][:results]
+        if @status
+          @status = false if @@body[:update_response][:overall_status] != 'OK'
+          if !@@body[:update_response][:results].is_a? Hash
+            @results += @@body[:update_response][:results]
           else
             @results.push(@@body[:update_response][:results])
           end
@@ -483,25 +446,25 @@ module MarketingCloudSDK
     def initialize(authStub, request_id)
       @results = []
       authStub.refreshToken
-      obj = {'ContinueRequest' => request_id}
-      response = authStub.auth.call(:retrieve, :message => {'RetrieveRequest' => obj})
+      obj = { 'ContinueRequest' => request_id }
+      response = authStub.auth.call(:retrieve, message: { 'RetrieveRequest' => obj })
 
       super(response)
 
-      if @status then
-        if @@body[:retrieve_response_msg][:overall_status] != "OK" && @@body[:retrieve_response_msg][:overall_status] != "MoreDataAvailable" then
+      if @status
+        if @@body[:retrieve_response_msg][:overall_status] != 'OK' && @@body[:retrieve_response_msg][:overall_status] != 'MoreDataAvailable'
           @status = false
           @message = @@body[:retrieve_response_msg][:overall_status]
         end
 
         @moreResults = false
-        if @@body[:retrieve_response_msg][:overall_status] == "MoreDataAvailable" then
+        if @@body[:retrieve_response_msg][:overall_status] == 'MoreDataAvailable'
           @moreResults = true
         end
 
-        if (!@@body[:retrieve_response_msg][:results].is_a? Hash) && (!@@body[:retrieve_response_msg][:results].nil?) then
-          @results = @results + @@body[:retrieve_response_msg][:results]
-        elsif  (!@@body[:retrieve_response_msg][:results].nil?)
+        if (!@@body[:retrieve_response_msg][:results].is_a? Hash) && !@@body[:retrieve_response_msg][:results].nil?
+          @results += @@body[:retrieve_response_msg][:results]
+        elsif !@@body[:retrieve_response_msg][:results].nil?
           @results.push(@@body[:retrieve_response_msg][:results])
         end
 
@@ -515,56 +478,54 @@ module MarketingCloudSDK
     def initialize(authStub, objType, props = nil, filter = nil)
       @results = []
       authStub.refreshToken
-      if !props then
+      unless props
         resp = ET_Describe.new(authStub, objType)
-        if resp then
+        if resp
           props = []
-          resp.results.map { |p|
-            if p[:is_retrievable] then
-              props << p[:name]
-            end
-          }
+          resp.results.map do |p|
+            props << p[:name] if p[:is_retrievable]
+          end
         end
       end
 
       # If the properties is a hash, then we just want to use the keys
-      if props.is_a? Hash then
-        obj = {'ObjectType' => objType,'Properties' => props.keys}
-      else
-        obj = {'ObjectType' => objType,'Properties' => props}
-      end
+      obj = if props.is_a? Hash
+              { 'ObjectType' => objType, 'Properties' => props.keys }
+            else
+              { 'ObjectType' => objType, 'Properties' => props }
+            end
 
-      if filter then
-        if filter.has_key?('LogicalOperator') then
+      if filter
+        if filter.key?('LogicalOperator')
           obj['Filter'] = filter
-          obj[:attributes!] = { 'Filter' => { 'xsi:type' => 'tns:ComplexFilterPart' }}
-          obj['Filter'][:attributes!] = { 'LeftOperand' => { 'xsi:type' => 'tns:SimpleFilterPart' }, 'RightOperand' => { 'xsi:type' => 'tns:SimpleFilterPart' }}
+          obj[:attributes!] = { 'Filter' => { 'xsi:type' => 'tns:ComplexFilterPart' } }
+          obj['Filter'][:attributes!] = { 'LeftOperand' => { 'xsi:type' => 'tns:SimpleFilterPart' }, 'RightOperand' => { 'xsi:type' => 'tns:SimpleFilterPart' } }
         else
           obj['Filter'] = filter
           obj[:attributes!] = { 'Filter' => { 'xsi:type' => 'tns:SimpleFilterPart' } }
         end
       end
 
-      response = authStub.auth.call(:retrieve, :message => {
-          'RetrieveRequest' => obj
-          })
+      response = authStub.auth.call(:retrieve, message: {
+                                      'RetrieveRequest' => obj
+                                    })
 
       super(response)
 
-      if @status then
-        if @@body[:retrieve_response_msg][:overall_status] != "OK" && @@body[:retrieve_response_msg][:overall_status] != "MoreDataAvailable" then
+      if @status
+        if @@body[:retrieve_response_msg][:overall_status] != 'OK' && @@body[:retrieve_response_msg][:overall_status] != 'MoreDataAvailable'
           @status = false
           @message = @@body[:retrieve_response_msg][:overall_status]
         end
 
         @moreResults = false
-        if @@body[:retrieve_response_msg][:overall_status] == "MoreDataAvailable" then
+        if @@body[:retrieve_response_msg][:overall_status] == 'MoreDataAvailable'
           @moreResults = true
         end
 
-        if (!@@body[:retrieve_response_msg][:results].is_a? Hash) && (!@@body[:retrieve_response_msg][:results].nil?) then
-          @results = @results + @@body[:retrieve_response_msg][:results]
-        elsif  (!@@body[:retrieve_response_msg][:results].nil?)
+        if (!@@body[:retrieve_response_msg][:results].is_a? Hash) && !@@body[:retrieve_response_msg][:results].nil?
+          @results += @@body[:retrieve_response_msg][:results]
+        elsif !@@body[:retrieve_response_msg][:results].nil?
           @results.push(@@body[:retrieve_response_msg][:results])
         end
 
@@ -591,61 +552,46 @@ module MarketingCloudSDK
     attr_accessor :filter
 
     def get(props = nil, filter = nil)
-      if props and props.is_a? Array then
-        @props = props
-      end
+      @props = props if props&.is_a?(Array)
 
-      if @props and @props.is_a? Hash then
-        @props = @props.keys
-      end
+      @props = @props.keys if @props&.is_a?(Hash)
 
-      if filter and filter.is_a? Hash then
-        @filter = filter
-      end
+      @filter = filter if filter&.is_a?(Hash)
       obj = ET_Get.new(@authStub, @obj, @props, @filter)
 
       @lastRequestID = obj.request_id
 
-      return obj
+      obj
     end
 
-    def info()
+    def info
       ET_Describe.new(@authStub, @obj)
     end
 
-    def getMoreResults()
+    def getMoreResults
       ET_Continue.new(@authStub, @lastRequestID)
     end
   end
 
   class ET_CUDSupport < ET_GetSupport
+    def post
+      @props = props if props&.is_a?(Hash)
 
-    def post()
-      if props and props.is_a? Hash then
-        @props = props
-      end
-
-      if @extProps then
-        @extProps.each { |key, value|
-          @props[key.capitalize] = value
-        }
+      @extProps&.each do |key, value|
+        @props[key.capitalize] = value
       end
 
       ET_Post.new(@authStub, @obj, @props)
     end
 
-    def patch()
-      if props and props.is_a? Hash then
-        @props = props
-      end
+    def patch
+      @props = props if props&.is_a?(Hash)
 
       ET_Patch.new(@authStub, @obj, @props)
     end
 
-    def delete()
-      if props and props.is_a? Hash then
-        @props = props
-      end
+    def delete
+      @props = props if props&.is_a?(Hash)
 
       ET_Delete.new(@authStub, @obj, @props)
     end
@@ -655,16 +601,14 @@ module MarketingCloudSDK
     attr_reader :urlProps, :urlPropsRequired, :lastPageNumber
 
     def get(props = nil)
-      if props and props.is_a? Hash then
-        @props = props
-      end
+      @props = props if props&.is_a?(Hash)
 
       completeURL = @endpoint
       additionalQS = {}
 
-      if @props and @props.is_a? Hash then
-        @props.each do |k,v|
-          if @urlProps.include?(k) then
+      if @props&.is_a?(Hash)
+        @props.each do |k, v|
+          if @urlProps.include?(k)
             completeURL.sub!("{#{k}}", v)
           else
             additionalQS[k] = v
@@ -673,143 +617,130 @@ module MarketingCloudSDK
       end
 
       @urlPropsRequired.each do |value|
-        if !@props || !@props.has_key?(value) then
+        if !@props || !@props.key?(value)
           raise "Unable to process request due to missing required prop: #{value}"
         end
       end
 
       @urlProps.each do |value|
-        completeURL.sub!("/{#{value}}", "")
+        completeURL.sub!("/{#{value}}", '')
       end
 
-      obj = ET_GetRest.new(@authStub, completeURL,additionalQS)
+      obj = ET_GetRest.new(@authStub, completeURL, additionalQS)
 
-      if obj.results.has_key?('page') then
+      if obj.results.key?('page')
         @lastPageNumber = obj.results['page']
         pageSize = obj.results['pageSize']
-        if obj.results.has_key?('count') then
+        if obj.results.key?('count')
           count = obj.results['count']
-        elsif obj.results.has_key?('totalCount') then
+        elsif obj.results.key?('totalCount')
           count = obj.results['totalCount']
         end
 
-        if !count.nil? && count > (@lastPageNumber * pageSize)  then
+        if !count.nil? && count > (@lastPageNumber * pageSize)
           obj.moreResults = true
         end
       end
-      return obj
+      obj
     end
 
-    def getMoreResults()
-      if props and props.is_a? Hash then
-        @props = props
-      end
+    def getMoreResults
+      @props = props if props&.is_a?(Hash)
 
-      originalPageValue = "1"
+      originalPageValue = '1'
       removePageFromProps = false
 
-      if !@props.nil? && @props.has_key?('$page') then
+      if !@props.nil? && @props.key?('$page')
         originalPageValue = @props['page']
       else
         removePageFromProps = true
       end
 
-      if @props.nil?
-        @props = {}
-      end
+      @props = {} if @props.nil?
 
       @props['$page'] = @lastPageNumber + 1
 
-      obj = self.get
+      obj = get
 
-      if removePageFromProps then
+      if removePageFromProps
         @props.delete('$page')
       else
         @props['$page'] = originalPageValue
       end
 
-      return obj
+      obj
     end
   end
 
   class ET_CUDSupportRest < ET_GetSupportRest
-
-    def post()
+    def post
       completeURL = @endpoint
 
-      if @props and @props.is_a? Hash then
-        @props.each do |k,v|
-          if @urlProps.include?(k) then
-            completeURL.sub!("{#{k}}", v)
-          end
+      if @props&.is_a?(Hash)
+        @props.each do |k, v|
+          completeURL.sub!("{#{k}}", v) if @urlProps.include?(k)
         end
       end
 
       @urlPropsRequired.each do |value|
-        if !@props || !@props.has_key?(value) then
+        if !@props || !@props.key?(value)
           raise "Unable to process request due to missing required prop: #{value}"
         end
       end
 
       # Clean Optional Parameters from Endpoint URL first
       @urlProps.each do |value|
-        completeURL.sub!("/{#{value}}", "")
+        completeURL.sub!("/{#{value}}", '')
       end
 
       ET_PostRest.new(@authStub, completeURL, @props)
     end
 
-    def patch()
+    def patch
       completeURL = @endpoint
       # All URL Props are required when doing Patch
       @urlProps.each do |value|
-        if !@props || !@props.has_key?(value) then
+        if !@props || !@props.key?(value)
           raise "Unable to process request due to missing required prop: #{value}"
         end
       end
 
-      if @props and @props.is_a? Hash then
-        @props.each do |k,v|
-          if @urlProps.include?(k) then
-            completeURL.sub!("{#{k}}", v)
-          end
+      if @props&.is_a?(Hash)
+        @props.each do |k, v|
+          completeURL.sub!("{#{k}}", v) if @urlProps.include?(k)
         end
       end
 
       obj = ET_PatchRest.new(@authStub, completeURL, @props)
     end
 
-    def delete()
+    def delete
       completeURL = @endpoint
       # All URL Props are required when doing Patch
       @urlProps.each do |value|
-        if !@props || !@props.has_key?(value) then
+        if !@props || !@props.key?(value)
           raise "Unable to process request due to missing required prop: #{value}"
         end
       end
 
-      if @props and @props.is_a? Hash then
-        @props.each do |k,v|
-          if @urlProps.include?(k) then
-            completeURL.sub!("{#{k}}", v)
-          end
+      if @props&.is_a?(Hash)
+        @props.each do |k, v|
+          completeURL.sub!("{#{k}}", v) if @urlProps.include?(k)
         end
       end
 
       ET_DeleteRest.new(@authStub, completeURL)
     end
-
   end
-
 
   class ET_GetRest < ET_Constructor
     def initialize(authStub, endpoint, qs = nil)
       authStub.refreshToken
 
-      if qs then
+      if qs
         qs['access_token'] = authStub.authToken
       else
-        qs = {"access_token" => authStub.authToken}
+        qs = { 'access_token' => authStub.authToken }
       end
 
       uri = URI.parse(endpoint)
@@ -822,19 +753,18 @@ module MarketingCloudSDK
       @moreResults = false
 
       obj = super(requestResponse, true)
-      return obj
+      obj
     end
   end
-
 
   class ET_ContinueRest < ET_Constructor
     def initialize(authStub, endpoint, qs = nil)
       authStub.refreshToken
 
-      if qs then
+      if qs
         qs['access_token'] = authStub.authToken
       else
-        qs = {"access_token" => authStub.authToken}
+        qs = { 'access_token' => authStub.authToken }
       end
 
       uri = URI.parse(endpoint)
@@ -850,23 +780,21 @@ module MarketingCloudSDK
     end
   end
 
-
   class ET_PostRest < ET_Constructor
     def initialize(authStub, endpoint, payload)
       authStub.refreshToken
 
-      qs = {"access_token" => authStub.authToken}
+      qs = { 'access_token' => authStub.authToken }
       uri = URI.parse(endpoint)
       uri.query = URI.encode_www_form(qs)
       http = Net::HTTP.new(uri.host, uri.port)
       http.use_ssl = true
       request = Net::HTTP::Post.new(uri.request_uri)
-      request.body =  payload.to_json
-      request.add_field "Content-Type", "application/json"
+      request.body = payload.to_json
+      request.add_field 'Content-Type', 'application/json'
       requestResponse = http.request(request)
 
       super(requestResponse, true)
-
     end
   end
 
@@ -874,17 +802,16 @@ module MarketingCloudSDK
     def initialize(authStub, endpoint, payload)
       authStub.refreshToken
 
-      qs = {"access_token" => authStub.authToken}
+      qs = { 'access_token' => authStub.authToken }
       uri = URI.parse(endpoint)
       uri.query = URI.encode_www_form(qs)
       http = Net::HTTP.new(uri.host, uri.port)
       http.use_ssl = true
       request = Net::HTTP::Patch.new(uri.request_uri)
-      request.body =  payload.to_json
-      request.add_field "Content-Type", "application/json"
+      request.body = payload.to_json
+      request.add_field 'Content-Type', 'application/json'
       requestResponse = http.request(request)
       super(requestResponse, true)
-
     end
   end
 
@@ -892,7 +819,7 @@ module MarketingCloudSDK
     def initialize(authStub, endpoint)
       authStub.refreshToken
 
-      qs = {"access_token" => authStub.authToken}
+      qs = { 'access_token' => authStub.authToken }
 
       uri = URI.parse(endpoint)
       uri.query = URI.encode_www_form(qs)
@@ -901,7 +828,6 @@ module MarketingCloudSDK
       request = Net::HTTP::Delete.new(uri.request_uri)
       requestResponse = http.request(request)
       super(requestResponse, true)
-
     end
   end
 
@@ -909,7 +835,7 @@ module MarketingCloudSDK
     def initialize
       super
       @endpoint = 'https://www.exacttargetapis.com/hub/v1/campaigns/{id}'
-      @urlProps = ["id"]
+      @urlProps = ['id']
       @urlPropsRequired = []
     end
 
@@ -917,8 +843,8 @@ module MarketingCloudSDK
       def initialize
         super
         @endpoint = 'https://www.exacttargetapis.com/hub/v1/campaigns/{id}/assets/{assetId}'
-        @urlProps = ["id", "assetId"]
-        @urlPropsRequired = ["id"]
+        @urlProps = %w[id assetId]
+        @urlPropsRequired = ['id']
       end
     end
   end
@@ -941,42 +867,42 @@ module MarketingCloudSDK
     def post
       originalProps = @props
 
-      if @props.is_a? Array then
+      if @props.is_a? Array
         multiDE = []
-        @props.each { |currentDE|
+        @props.each do |currentDE|
           currentDE['Fields'] = {}
           currentDE['Fields']['Field'] = []
-          currentDE['columns'].each { |key|
+          currentDE['columns'].each do |key|
             currentDE['Fields']['Field'].push(key)
-          }
+          end
           currentDE.delete('columns')
           multiDE.push(currentDE.dup)
-        }
+        end
 
         @props = multiDE
       else
         @props['Fields'] = {}
         @props['Fields']['Field'] = []
 
-        @columns.each { |key|
-        @props['Fields']['Field'].push(key)
-        }
+        @columns.each do |key|
+          @props['Fields']['Field'].push(key)
+        end
       end
 
       obj = super
       @props = originalProps
-      return obj
+      obj
     end
 
     def patch
       @props['Fields'] = {}
       @props['Fields']['Field'] = []
-      @columns.each { |key|
+      @columns.each do |key|
         @props['Fields']['Field'].push(key)
-      }
+      end
       obj = super
-      @props.delete("Fields")
-      return obj
+      @props.delete('Fields')
+      obj
     end
 
     class Column < ET_GetSupport
@@ -986,24 +912,17 @@ module MarketingCloudSDK
       end
 
       def get
+        @props = props if props&.is_a?(Array)
 
-        if props and props.is_a? Array then
-          @props = props
-        end
+        @props = @props.keys if @props&.is_a?(Hash)
 
-        if @props and @props.is_a? Hash then
-          @props = @props.keys
-        end
-
-        if filter and filter.is_a? Hash then
-          @filter = filter
-        end
+        @filter = filter if filter&.is_a?(Hash)
 
         fixCustomerKey = false
-        if filter and filter.is_a? Hash then
+        if filter&.is_a?(Hash)
           @filter = filter
-          if @filter.has_key?("Property") && @filter["Property"] == "CustomerKey" then
-            @filter["Property"]  = "DataExtension.CustomerKey"
+          if @filter.key?('Property') && @filter['Property'] == 'CustomerKey'
+            @filter['Property'] = 'DataExtension.CustomerKey'
             fixCustomerKey = true
           end
         end
@@ -1011,69 +930,59 @@ module MarketingCloudSDK
         obj = ET_Get.new(@authStub, @obj, @props, @filter)
         @lastRequestID = obj.request_id
 
-        if fixCustomerKey then
-          @filter["Property"] = "CustomerKey"
-        end
+        @filter['Property'] = 'CustomerKey' if fixCustomerKey
 
-        return obj
+        obj
       end
     end
 
     class Row < ET_CUDSupport
       attr_accessor :Name, :CustomerKey
 
-      def initialize()
+      def initialize
         super
-        @obj = "DataExtensionObject"
+        @obj = 'DataExtensionObject'
       end
 
       def get
         getName
-        if props and props.is_a? Array then
-          @props = props
-        end
+        @props = props if props&.is_a?(Array)
 
-        if @props and @props.is_a? Hash then
-          @props = @props.keys
-        end
+        @props = @props.keys if @props&.is_a?(Hash)
 
-        if filter and filter.is_a? Hash then
-          @filter = filter
-        end
+        @filter = filter if filter&.is_a?(Hash)
 
         obj = ET_Get.new(@authStub, "DataExtensionObject[#{@Name}]", @props, @filter)
         @lastRequestID = obj.request_id
 
-        return obj
+        obj
       end
 
       def post
         getCustomerKey
         originalProps = @props
         ## FIX THIS
-        if @props.is_a? Array then
-=begin
-          multiRow = []
-          @props.each { |currentDE|
-
-            currentDE['columns'].each { |key|
-              currentDE['Fields'] = {}
-              currentDE['Fields']['Field'] = []
-              currentDE['Fields']['Field'].push(key)
-            }
-            currentDE.delete('columns')
-            multiRow.push(currentDE.dup)
-          }
-
-          @props = multiRow
-=end
+        if @props.is_a? Array
+        #           multiRow = []
+        #           @props.each { |currentDE|
+        #
+        #             currentDE['columns'].each { |key|
+        #               currentDE['Fields'] = {}
+        #               currentDE['Fields']['Field'] = []
+        #               currentDE['Fields']['Field'].push(key)
+        #             }
+        #             currentDE.delete('columns')
+        #             multiRow.push(currentDE.dup)
+        #           }
+        #
+        #           @props = multiRow
         else
           currentFields = []
           currentProp = {}
 
-          @props.each { |key,value|
-            currentFields.push({"Name" => key, "Value" => value})
-          }
+          @props.each do |key, value|
+            currentFields.push('Name' => key, 'Value' => value)
+          end
           currentProp['CustomerKey'] = @CustomerKey
           currentProp['Properties'] = {}
           currentProp['Properties']['Property'] = currentFields
@@ -1089,23 +998,24 @@ module MarketingCloudSDK
         currentFields = []
         currentProp = {}
 
-        @props.each { |key,value|
-          currentFields.push({"Name" => key, "Value" => value})
-        }
+        @props.each do |key, value|
+          currentFields.push('Name' => key, 'Value' => value)
+        end
         currentProp['CustomerKey'] = @CustomerKey
         currentProp['Properties'] = {}
         currentProp['Properties']['Property'] = currentFields
 
         ET_Patch.new(@authStub, @obj, currentProp)
       end
+
       def delete
         getCustomerKey
         currentFields = []
         currentProp = {}
 
-        @props.each { |key,value|
-          currentFields.push({"Name" => key, "Value" => value})
-        }
+        @props.each do |key, value|
+          currentFields.push('Name' => key, 'Value' => value)
+        end
         currentProp['CustomerKey'] = @CustomerKey
         currentProp['Keys'] = {}
         currentProp['Keys']['Key'] = currentFields
@@ -1114,17 +1024,18 @@ module MarketingCloudSDK
       end
 
       private
+
       def getCustomerKey
-        if @CustomerKey.nil? then
-          if @CustomerKey.nil? && @Name.nil? then
+        if @CustomerKey.nil?
+          if @CustomerKey.nil? && @Name.nil?
             raise 'Unable to process DataExtension::Row request due to CustomerKey and Name not being defined on ET_DatExtension::row'
           else
             de = ET_DataExtension.new
             de.authStub = @authStub
-            de.props = ["Name","CustomerKey"]
-            de.filter = {'Property' => 'CustomerKey','SimpleOperator' => 'equals','Value' => @Name}
+            de.props = %w[Name CustomerKey]
+            de.filter = { 'Property' => 'CustomerKey', 'SimpleOperator' => 'equals', 'Value' => @Name }
             getResponse = de.get
-            if getResponse.status && (getResponse.results.length == 1) then
+            if getResponse.status && (getResponse.results.length == 1)
               @CustomerKey = getResponse.results[0][:customer_key]
             else
               raise 'Unable to process DataExtension::Row request due to unable to find DataExtension based on Name'
@@ -1134,16 +1045,16 @@ module MarketingCloudSDK
       end
 
       def getName
-        if @Name.nil? then
-          if @CustomerKey.nil? && @Name.nil? then
+        if @Name.nil?
+          if @CustomerKey.nil? && @Name.nil?
             raise 'Unable to process DataExtension::Row request due to CustomerKey and Name not being defined on ET_DatExtension::row'
           else
             de = ET_DataExtension.new
             de.authStub = @authStub
-            de.props = ["Name","CustomerKey"]
-            de.filter = {'Property' => 'CustomerKey','SimpleOperator' => 'equals','Value' => @CustomerKey}
+            de.props = %w[Name CustomerKey]
+            de.filter = { 'Property' => 'CustomerKey', 'SimpleOperator' => 'equals', 'Value' => @CustomerKey }
             getResponse = de.get
-            if getResponse.status && (getResponse.results.length == 1) then
+            if getResponse.status && (getResponse.results.length == 1)
               @Name = getResponse.results[0][:name]
             else
               raise 'Unable to process DataExtension::Row request due to unable to find DataExtension based on CustomerKey'
@@ -1183,8 +1094,8 @@ module MarketingCloudSDK
     end
 
     def send
-      @tscall = {"TriggeredSendDefinition" => @props, "Subscribers" => @subscribers, "Attributes" => @attributes}
-      ET_Post.new(@authStub, "TriggeredSend", @tscall)
+      @tscall = { 'TriggeredSendDefinition' => @props, 'Subscribers' => @subscribers, 'Attributes' => @attributes }
+      ET_Post.new(@authStub, 'TriggeredSend', @tscall)
     end
   end
 
@@ -1236,5 +1147,4 @@ module MarketingCloudSDK
       @obj = 'ClickEvent'
     end
   end
-
 end
